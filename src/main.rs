@@ -16,28 +16,68 @@ fn main() -> io::Result<()> {
     {
         // A few assumptions:
         // 1. URI scheme is always alphanumeric and not "too long"
-        // 2. Every URI scheme registered with the current Windows OS has subkey: "shell\open\command"
+        // 2. Every URI scheme registered with the current Windows OS has subkey: "shell\open\command" which containing tuples: "(Default)":REG_SZ:"Path_To_Binary_Executable"
         // 3. In root subkey, there are tuples: "(Default)":REG_SZ:"URL:protocol-friendly-name" and "URL Protocol":REG_SZ:""
-        // println!("{}",i);
         if i.chars().all(char::is_alphanumeric) && i.chars().count()<MAX_LEN+1 {
-            // print!("{}: ", i);
             let mut subkey2check: String = i.clone();
             subkey2check.push_str("\\shell\\open\\command");
-            let mut flag2 = false;
-            let mut flag3 = false;
+            let mut flag2 = true; // true = failed the checkpoint
+            let mut flag3 = true; // true = failed the checkpoint
 
             let exe_subkey_check = classroot.open_subkey(subkey2check);
 
             match exe_subkey_check {
                 Ok(subkey) => {
-                    for (name, value) in subkey.enum_values().map(|x| x.unwrap()) {
-                        if name=="" {
-                            match value.vtype {
-                                REG_SZ => {
-                                    let valuestr = String::from(format!("{}", value));
-                                    println!("{}    {}", i, valuestr);
+                    for (name2, value2) in subkey.enum_values().map(|x| x.unwrap()) {
+                        if name2=="" {
+                            flag2 = false; // If can't find the (Default) key, checkpoint 2 does not pass.
+                            match value2.vtype {
+                                REG_SZ | REG_EXPAND_SZ | REG_MULTI_SZ => {
+                                    let value2str = String::from(format!("{}", value2));
+                                    let rootkey_check = classroot.open_subkey(String::from(format!("{}",i)));
+                                    match rootkey_check {
+                                        Ok(rootkey) => {
+                                            // Look for 
+                                            // "(Default)":REG_SZ:"URL:protocol-friendly-name" 
+                                            // "URL Protocol":REG_SZ:""
+                                            let mut found_friendlyname = false;
+                                            let mut found_protocol = false;                                            
+                                            for (name3, value3) in rootkey.enum_values().map(|x| x.unwrap()) {
+                                                if name3=="" {
+                                                    match value3.vtype {
+                                                        REG_SZ | REG_EXPAND_SZ | REG_MULTI_SZ => found_friendlyname = true,
+                                                        _ => found_friendlyname = false,
+                                                    }
+                                                } else if name3=="URL Protocol" {
+                                                    match value3.vtype {
+                                                        REG_SZ | REG_EXPAND_SZ | REG_MULTI_SZ => {
+                                                            if String::from(format!("{}",value3))==String::from("") {
+                                                                found_friendlyname = true;
+                                                            }                                                            
+                                                        },
+                                                        _ => found_friendlyname = false,
+                                                    }
+                                                }
+                                            }
+
+                                            if found_friendlyname==false || found_protocol==false {
+                                                flag3 = true;
+                                            } else {
+                                                // Passed all checkpoints! 
+                                                // Save these entries from subkey(s):
+                                                // i
+                                                //      "(Default)":REG_SZ:"URL:protocol-friendly-name"
+                                                // i\shell\open\command
+                                                //      "(Default)":REG_SZ:"Path_To_Binary_Executable"
+                                            }
+
+                                        },
+                                        Err(e) => panic!("{} - Is registry edited?", e), 
+                                    }
+
+                                    // println!("{}    {}", i, valuestr);
                                 },
-                                _ => flag3 = true,
+                                _ => flag2 = true,
                             }
                         }
                     }
@@ -61,11 +101,11 @@ fn main() -> io::Result<()> {
         }
     }
 
-    println!("=== Summary ===");
+    println!("===== Summary =====");
     println!("{}    Found", success_cntr);
     println!("{}    Failed due to non-alphanumeric or length", naming_fail_cntr);
-    println!("{}    Missing subkey", subkey_fail_cntr);
-    println!("{}    Malformed key values types", malform_cntr);
+    println!("{}    Missing subkey shell\\open\\command", subkey_fail_cntr);
+    println!("{}    Missing or malformed entries in root", malform_cntr);
     
 
     // let system = RegKey::predef(HKEY_LOCAL_MACHINE)
