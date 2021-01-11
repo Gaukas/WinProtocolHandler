@@ -6,6 +6,7 @@ use winreg::enums::*;
 const MAX_LEN: usize = 8;
 
 fn main() -> io::Result<()> {
+    let mut db = Vec::<(String, String, String)>::new();
     let classroot = RegKey::predef(HKEY_CLASSES_ROOT);
     let mut naming_fail_cntr = 0;
     let mut subkey_fail_cntr = 0;
@@ -33,7 +34,7 @@ fn main() -> io::Result<()> {
                             flag2 = false; // If can't find the (Default) key, checkpoint 2 does not pass.
                             match value2.vtype {
                                 REG_SZ | REG_EXPAND_SZ | REG_MULTI_SZ => {
-                                    let value2str = String::from(format!("{}", value2));
+                                    //let value2str = String::from(format!("{}", value2));
                                     let rootkey_check = classroot.open_subkey(String::from(format!("{}",i)));
                                     match rootkey_check {
                                         Ok(rootkey) => {
@@ -51,24 +52,32 @@ fn main() -> io::Result<()> {
                                                 } else if name3=="URL Protocol" {
                                                     match value3.vtype {
                                                         REG_SZ | REG_EXPAND_SZ | REG_MULTI_SZ => {
-                                                            if String::from(format!("{}",value3))==String::from("") {
-                                                                found_friendlyname = true;
-                                                            }                                                            
+                                                            if String::from(format!("{}",value3))==String::from("\"\"") {
+                                                                found_protocol = true;
+                                                            }                                                           
                                                         },
-                                                        _ => found_friendlyname = false,
+                                                        _ => found_protocol = true,
                                                     }
                                                 }
+                                                //println!("{} has {}", String::from(format!("{}",i)), name3);
                                             }
 
-                                            if found_friendlyname==false || found_protocol==false {
-                                                flag3 = true;
-                                            } else {
+                                            if found_friendlyname==true && found_protocol==true {
+                                                flag3 = false;
+                                            }
+
+                                            if flag3 == false
+                                            {
                                                 // Passed all checkpoints! 
                                                 // Save these entries from subkey(s):
                                                 // i
                                                 //      "(Default)":REG_SZ:"URL:protocol-friendly-name"
                                                 // i\shell\open\command
                                                 //      "(Default)":REG_SZ:"Path_To_Binary_Executable"
+                                                let path_to_exe: String = subkey.get_value("")?;
+                                                let friendly_name: String = rootkey.get_value("")?;
+                                                db.push((String::from(format!("{}",i)), friendly_name, path_to_exe));
+                                                //println!("Pushed {}", String::from(format!("{}",i)));
                                             }
 
                                         },
@@ -99,6 +108,10 @@ fn main() -> io::Result<()> {
         } else {
             naming_fail_cntr+=1;
         }
+    }
+
+    for (i, x) in db.iter().enumerate() {
+        println!("{}  {}    {}    {}", i, x.0, x.1, x.2);
     }
 
     println!("===== Summary =====");
