@@ -2,16 +2,24 @@ extern crate winreg;
 use winreg::RegKey;
 use winreg::enums::*;
 use std::path::Path;
+use std::io; 
 
 const MAX_LEN: usize = 12;
 
-pub fn scan_protocol(protocol_list: &mut Vec::<(String, String, String)>) -> bool {
+pub fn scan_protocol(protocol_list: &mut Vec::<(String, String, String)>, verbose: bool) -> bool {
+    // Purge the vector
+    protocol_list.clear();
+    
     let classroot = RegKey::predef(HKEY_CLASSES_ROOT);
     let mut naming_fail_cntr = 0;
     let mut subkey_fail_cntr = 0;
     let mut malform_cntr = 0;
     let mut success_cntr = 0;
-    println!("Protocols registered:");
+
+    if verbose {
+        println!("Protocols registered:");
+    }
+    
     for i in RegKey::predef(HKEY_CLASSES_ROOT).enum_keys().map(|x| x.unwrap())
     {
         // A few assumptions:
@@ -78,7 +86,6 @@ pub fn scan_protocol(protocol_list: &mut Vec::<(String, String, String)>) -> boo
                                                 protocol_list.push((String::from(format!("{}",i)), friendly_name, path_to_exe));
                                                 //println!("Pushed {}", String::from(format!("{}",i)));
                                             }
-
                                         },
                                         Err(_e) => return false, 
                                     }
@@ -109,15 +116,17 @@ pub fn scan_protocol(protocol_list: &mut Vec::<(String, String, String)>) -> boo
         }
     }
 
-    for (i, x) in protocol_list.iter().enumerate() {
-        println!("{}  {}    {}    {}", i, x.0, x.1, x.2);
-    }
+    if verbose {
+        for (i, x) in protocol_list.iter().enumerate() {
+            println!("{}  {}    {}    {}", i, x.0, x.1, x.2);
+        }
 
-    println!("===== Summary =====");
-    println!("{}    Found", success_cntr);
-    println!("{}    Failed due to non-alphanumeric or length", naming_fail_cntr);
-    println!("{}    Missing subkey shell\\open\\command", subkey_fail_cntr);
-    println!("{}    Missing or malformed entries in root", malform_cntr);
+        println!("===== Summary =====");
+        println!("{}    Found", success_cntr);
+        println!("{}    Failed due to non-alphanumeric or length", naming_fail_cntr);
+        println!("{}    Missing subkey \"shell\\open\\command\"", subkey_fail_cntr);
+        println!("{}    Missing or malformed entries in root", malform_cntr);
+    }
 
     return true;
 }
@@ -160,7 +169,48 @@ pub fn add_protocol(protocol_list: &mut Vec::<(String, String, String)>, protoco
 
     comm_key.set_value("", &path_to_exe).unwrap();
 
-    scan_protocol(protocol_list);
+    scan_protocol(protocol_list, false);
     
     return debug_flag;
+}
+
+pub fn del_protocol(protocol_list: &mut Vec::<(String, String, String)>, protocol: String, friendly_name: String) -> u8 {
+    /*************************************************
+     * Add a protocol:
+     * 
+     *  HKEY_CLASSES_ROOT/
+     *      your-protocol-name/
+     *          (Default)    "URL:your-protocol-name Protocol"
+     *          URL Protocol ""
+     *          shell/
+     *              open/
+     *                  command/
+     *                      (Default) PathToExecutable
+     * 
+     *************************************************/
+
+    for p in protocol_list.iter() {
+        if p.0 == protocol {
+            if p.1 == friendly_name {
+                let hkcr = RegKey::predef(HKEY_CLASSES_ROOT);
+                let path = Path::new(&protocol[..]).join("");
+                hkcr.delete_subkey_all(&path).unwrap();
+                match hkcr.open_subkey(&path) {
+                    Ok(_badkey) => {
+                        scan_protocol(protocol_list, false);
+                        return 1;
+                    },
+                    Err(e) => {
+                        match e.kind() {
+                            io::ErrorKind::NotFound => return 0,
+                            _ => return 2,
+                        }
+                    },
+                }
+            } else {
+                return 3;
+            }
+        }
+    }
+    return 3;
 }
