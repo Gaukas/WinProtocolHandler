@@ -174,7 +174,7 @@ pub fn add_protocol(protocol_list: &mut Vec::<(String, String, String)>, protoco
     return debug_flag;
 }
 
-pub fn del_protocol(protocol_list: &mut Vec::<(String, String, String)>, protocol: String, friendly_name: String) -> u8 {
+pub fn del_protocol(protocol: String, friendly_name: String) -> u8 {
     /*************************************************
      * Add a protocol:
      * 
@@ -189,6 +189,8 @@ pub fn del_protocol(protocol_list: &mut Vec::<(String, String, String)>, protoco
      * 
      *************************************************/
 
+    let mut protocol_list = Vec::<(String, String, String)>::new();
+
     for p in protocol_list.iter() {
         if p.0 == protocol {
             if p.1 == friendly_name {
@@ -197,7 +199,7 @@ pub fn del_protocol(protocol_list: &mut Vec::<(String, String, String)>, protoco
                 hkcr.delete_subkey_all(&path).unwrap();
                 match hkcr.open_subkey(&path) {
                     Ok(_badkey) => {
-                        scan_protocol(protocol_list, false);
+                        scan_protocol(&mut protocol_list, false);
                         return 1;
                     },
                     Err(e) => {

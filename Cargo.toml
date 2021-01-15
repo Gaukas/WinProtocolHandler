@@ -8,3 +8,12 @@ edition = "2018"
 
 [dependencies]
 winreg = "0.8"
+winres = "0.1.11"
+
+[[bin]]
+name = "client"
+path = "src/client/main.rs"
+
+[[bin]]
+name = "admin"
+path = "src/admin/main.rs"
