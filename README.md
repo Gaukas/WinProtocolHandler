@@ -5,6 +5,6 @@ Windows Protocol Handler(WPH), the URI Scheme management suite which provides in
 
 # Features to support
 
-- [ ] Automatically scan for registered protocols 
-- [ ] Add/Delete Protocols
+- [x] Automatically scan for registered protocols 
+- [x] Add/Delete Protocols
 - [ ] Hijack/Forward Protocols
